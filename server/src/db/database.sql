@@ -1,6 +1,6 @@
 CREATE DATABASE chat_app;
 
-CREATE TYPE message_type AS ENUM ('user', 'system', 'bot');
+CREATE TYPE message_type AS ENUM ('user', 'system');
 
 CREATE TABLE users (
   id SERIAL PRIMARY KEY,
