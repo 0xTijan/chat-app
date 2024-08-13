@@ -29,17 +29,18 @@ router.post("/login", async (req, res) => {
       res.json({
         loggedIn: true,
         username: potentialLogin.rows[0].username,
-        tokens: tokens
+        tokens: tokens,
+        id: potentialLogin.rows[0].id
       });
     } else {
       // not 
-      res.json({
+      res.status(403).json({
         loggedIn: false,
         status: "Wrong username or password."
       });
     }
   } else {
-    res.json({
+    res.status(403).json({
       loggedIn: false,
       status: "Wrong username or password."
     });
@@ -73,6 +74,7 @@ router.post("/signup", async (req, res) => {
       loggedIn: true,
       username: newUserQuery.rows[0].username,
       tokens: tokens,
+      id: newUserQuery.rows[0].id,
     });
   } else {
     res.json({
@@ -90,7 +92,7 @@ router.get('/refresh_token', (req, res) => {
     jwt.verify(refreshToken, (process.env.REFRESH_TOKEN_SECRET || ""), (error: any, user: any) => {
       if (error) return res.status(403).json({error:error.message});
       let tokens = jwtTokens(user.id, user.username);
-      res.cookie('refresh_token', tokens.refreshToken, {...(process.env.COOKIE_DOMAIN && {domain: process.env.COOKIE_DOMAIN}) , httpOnly: true,sameSite: 'none', secure: true});
+      res.cookie('refresh_token', tokens.refreshToken);
       return res.json(tokens);
     });
   } catch (err) {
