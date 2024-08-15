@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import cors from "cors";
 import authRouter from "./routers/authRouter";
 import roomsRouter from "./routers/roomsRouter";
+import messagesRouter from "./routers/messagesRouter";
 import session from "express-session";
 import dotenv from 'dotenv';
 import { Server } from 'socket.io';
@@ -17,8 +18,12 @@ dotenv.config();
 const app: Application = express();
 const port: number = 3000;
 const server = createServer(app);
-export const io = new Server(server);
-
+export const io = new Server(server, {cors: {
+  origin: "http://localhost:5173",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Authorization"],
+  credentials: true
+}});
 
 // MIDDLEWAREs
 const corsOptions ={
@@ -43,8 +48,9 @@ app.use(session({
 
 
 // ROUTES
-app.use("/auth", authRouter);   // auth - login, signup
-app.use("/rooms", roomsRouter); // rooms - create, delete, join
+app.use("/auth", authRouter);         // auth - login, signup
+app.use("/rooms", roomsRouter);       // rooms - create, delete, join
+app.use("/messages", messagesRouter); // messages - send, get, delete, edit
 
 
 // SOCKETS
@@ -60,7 +66,8 @@ io.on('connection', (socket) => {
   });
 
   // join room
-  socket.on("join room", async (msg) => {
+  socket.on("join-room", async (msg) => {
+    console.log("joining ", msg);
     const isDone = await handleJoinRoom(msg, socket);
     if(!isDone) {
       socket.emit("error", { message: "" });
@@ -68,7 +75,7 @@ io.on('connection', (socket) => {
   });
 
   // leave room
-  socket.on("leave room", async (msg) => {
+  socket.on("leave-room", async (msg) => {
     const isDone = await handleLeaveRoom(msg, socket);
     if(!isDone) {
       socket.emit("error", { message: "" });

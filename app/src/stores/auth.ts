@@ -15,6 +15,10 @@ interface User {
   loggedIn: boolean;
   id: number | null;
   username: string | null;
+  jwt: {
+    access: string | null;
+    refresh: string | null;
+  }
 }
 
 export const useAuthStore = defineStore('jwt', () => {
@@ -29,6 +33,10 @@ export const useAuthStore = defineStore('jwt', () => {
     loggedIn: false,
     id: null,
     username: null,
+    jwt: {
+      access: null,
+      refresh: null,
+    }
   });
 
   // Helper function to persist data to localStorage
@@ -107,6 +115,10 @@ export const useAuthStore = defineStore('jwt', () => {
       loggedIn: true,
       id: data.id,
       username: data.username,
+      jwt: {
+        access: data.tokens.accessToken,
+        refresh: data.tokens.refreshToken
+      }
     };
 
     persistData();
@@ -123,7 +135,7 @@ export const useAuthStore = defineStore('jwt', () => {
       console.error("Failed to log out", error);
     } finally {
       jwt.value = { access: null, refresh: null };
-      user.value = { loggedIn: false, id: null, username: null };
+      user.value = { loggedIn: false, id: null, username: null, jwt: { refresh: null, access: null } };
       Cookies.remove('access_token'); // Remove access token from cookies
       Cookies.remove('refresh_token'); // Remove refresh token from cookies
       persistData();
@@ -170,6 +182,8 @@ export const useAuthStore = defineStore('jwt', () => {
         console.error('Token refresh failed:', error);
         await logout();
       }
+    } else if (router.currentRoute.value.path === '/signup') {
+      router.push('/login');
     } else if (router.currentRoute.value.path !== '/login') {
       router.push('/login');
     }

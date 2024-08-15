@@ -2,9 +2,48 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { computed, ref } from 'vue';
 import { URL, useAuthStore } from './auth';
+import { useRouter } from 'vue-router';
 
+export interface Room {
+  id: number;
+  name: string;
+  is_private: boolean;
+  password?: string;
+}
+
+export interface RoomData {
+  data: {
+    room: {
+      id: number;
+      name: string;
+      created_at: string;
+      owner: number;
+      is_private: boolean;
+    };
+    users: {
+      id: number;
+      username: string;
+      created_at: string;
+      is_owner: boolean;
+      last_login: string;
+    }[];
+  };
+};
+
+export interface Message {
+  id: number;
+  content: string;
+  created_at: string;
+  user_id: number;
+  room_id: number;
+  message_type: MessageType;
+};
+
+export type MessageType = "user" | "system";
 
 export const useRoomsStore = defineStore('rooms', () => {
+  const router = useRouter(); 
+
   const rooms = ref({
     availableRooms: [],
     joinedRooms: [],
@@ -13,18 +52,103 @@ export const useRoomsStore = defineStore('rooms', () => {
   const { currentJwt } = useAuthStore();
 
   const getRooms = async() => {
-    const { data } = await axios.get(
-      `${URL}/rooms/`,
+    if(currentJwt.access) {
+      console.log("getting room A", currentJwt.access);
+      const { data } = await axios.get(
+        `${URL}/rooms/`,
+        {
+          headers: {
+            "Authorization": `Bearer ${currentJwt.access}`
+          }
+        }
+      );
+      console.log(data);
+      rooms.value = data;
+      return data;
+    }
+  };
+
+  const createRoom = async (data: Room) => {
+    const postReq = await axios.post(
+      `${URL}/rooms/create`,
+      {
+        ...data
+      },
       {
         headers: {
           "Authorization": `Bearer ${currentJwt.access}`
         }
       }
     );
-    console.log(data);
-    rooms.value = data;
-    return data;
-  }
 
-  return { rooms: currentRooms, getRooms };
+    await getRooms();
+    router.push('/');
+  };
+
+  const getRoomById = async (id: number): Promise<RoomData | null> => {
+    try {
+      console.log(id, "getting");
+      const req = await axios.get(
+        `${URL}/rooms/${id}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${currentJwt.access}`
+          }
+        }
+      );
+      console.log("result, ", req.data);
+      // get room data by id /rooms/:id
+      // get room content by id /messages/:roomId
+      // join room sockets
+      return req.data;
+    } catch(err) {
+      console.log(err);
+      return null;
+    }
+  };
+
+  const getRoomMessages = async (roomId: number) => {
+    try {
+      console.log(roomId, "getting");
+      const req = await axios.get(
+        `${URL}/messages/${roomId}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${currentJwt.access}`
+          }
+        }
+      );
+      console.log("result, ", req.data);
+      // get room data by id /rooms/:id
+      // get room content by id /messages/:roomId
+      // join room sockets
+      return req.data;
+    } catch(err) {
+      console.log(err);
+      return null;
+    }
+  };
+
+  const joinRoom = async (data: { name: string, password: string }) => {
+    const postReq = await axios.post(
+      `${URL}/rooms/join`,
+      {
+        ...data
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${currentJwt.access}`
+        }
+      }
+    );
+
+    await getRooms();
+    router.push('/');
+  };
+
+  const deleteRoom = async () => {
+
+  };
+
+  return { rooms: currentRooms, getRooms, createRoom, joinRoom, getRoomById, getRoomMessages };
 });

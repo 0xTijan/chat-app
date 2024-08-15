@@ -15,7 +15,7 @@ CREATE TABLE rooms (
   name VARCHAR(50) UNIQUE NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   owner INTEGER references users(id),
-  password_hash VARCHAR(255),   -- NULL for public rooms
+  password_hash VARCHAR(255),
   is_private BOOLEAN DEFAULT FALSE
 );
 
@@ -33,7 +33,3 @@ CREATE TABLE room_members (
   room_id INTEGER references rooms(id) ON DELETE CASCADE,
   PRIMARY KEY(user_id, room_id)
 );
-
-CREATE INDEX idx_username ON users(username);
-CREATE INDEX idx_room_membership ON room_members(room_id, user_id);
-CREATE INDEX idx_messages_created_at ON messages(created_at);

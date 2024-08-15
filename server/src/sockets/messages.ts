@@ -41,5 +41,14 @@ const saveMessage = async (msg: {content: string, room_id: number}, user_id: num
 
 const sendMessageToRoomSocket = async (msg: {content: string, room_id: number}, user_id: number) => {
   // Broadcast message to all clients in the same room
-  io.to(msg.room_id.toString()).emit('chat message', {...msg, user_id: user_id});
+  console.log("sending to ", msg.room_id.toString(), msg, user_id);
+  io.in(msg.room_id.toString()).emit(
+    'chat message',
+    {
+      ...msg,
+      user_id: user_id,
+      created_at: new Date(),
+      message_type: "user"
+    }
+  );
 };

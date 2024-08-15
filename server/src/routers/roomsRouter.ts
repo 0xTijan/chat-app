@@ -37,6 +37,70 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// GET ROOM BY ID
+router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    res.status(500).json({ message: "Missing user" });
+    return;
+  }
+
+  const roomId = Number(req.params.id);
+
+  try {
+    // Fetch room data along with members and user details in a single query
+    const roomDataQuery = await pool.query(
+      `SELECT 
+        r.id AS room_id, 
+        r.name AS room_name, 
+        r.created_at AS room_created_at, 
+        r.owner AS room_owner, 
+        r.is_private AS room_is_private,
+        rm.user_id AS member_user_id,
+        u.username AS member_username,
+        u.created_at AS member_created_at,
+        u.last_login AS member_last_login
+      FROM 
+        rooms r
+      LEFT JOIN 
+        room_members rm ON r.id = rm.room_id
+      LEFT JOIN 
+        users u ON rm.user_id = u.id
+      WHERE 
+        r.id = $1`,
+      [roomId]
+    );
+
+    const room = {
+      id: roomDataQuery.rows[0].room_id,
+      name: roomDataQuery.rows[0].room_name,
+      created_at: roomDataQuery.rows[0].room_created_at,
+      owner: roomDataQuery.rows[0].room_owner,
+      is_private: roomDataQuery.rows[0].room_is_private,
+    };
+
+    const users = roomDataQuery.rows.map((row) => {
+      const isOwner = room.owner === row.member_user_id;
+      return {
+        id: row.member_user_id,
+        username: row.member_username,
+        created_at: row.member_created_at,
+        last_login: row.member_last_login,
+        is_owner: isOwner
+      };
+    });
+
+    const dataToReturn = {
+      room,
+      users
+    };
+
+    res.json(dataToReturn);
+  } catch (error) {
+    console.error('Error fetching room data:', error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 // CREATE
 router.post("/create", authenticateToken, async (req: AuthenticatedRequest, res) => { 
   // create room (row in rooms)
@@ -48,6 +112,7 @@ router.post("/create", authenticateToken, async (req: AuthenticatedRequest, res)
   }
 
   try {
+    console.log("in try ");
     let passwordHash = null;
     if (req.body.is_private) {
       passwordHash = await bcrypt.hash(req.body.password, 10);
@@ -63,12 +128,15 @@ router.post("/create", authenticateToken, async (req: AuthenticatedRequest, res)
       ]
     );
 
+    console.log("done query ", newRoomQuery.rows);
+
     if (newRoomQuery.rows[0].id) {
       createdRoomId = newRoomQuery.rows[0].id;
     }
   } catch(err) {
     res.json({
-      status: "Room name already taken."
+      status: "Room name already taken.",
+      error: err
     });
     return;
   }
@@ -109,6 +177,7 @@ router.post("/create", authenticateToken, async (req: AuthenticatedRequest, res)
         "system"
       ]
     );
+    console.log("success");
     res.json({
       status: "Success",
     });
@@ -140,11 +209,13 @@ router.post("/join", authenticateToken, async (req: AuthenticatedRequest, res) =
   }
 
   // check if room is private (check password)
-  console.log(req.body.id, req.body.name);
+  console.log(req.body.name);
   const roomsQuery = await pool.query(
-    "SELECT * FROM rooms r WHERE r.id=$1 AND r.name=$2",
-    [req.body.id, req.body.name]
+    "SELECT * FROM rooms r WHERE r.name=$1",
+    [req.body.name]
   );
+
+  console.log(roomsQuery.rows[0]);
 
   // check password
   if(roomsQuery.rows[0].is_private) {
@@ -159,11 +230,8 @@ router.post("/join", authenticateToken, async (req: AuthenticatedRequest, res) =
   try {
     const newRoomMemberQuery = await pool.query(
       "INSERT INTO room_members(user_id, room_id) values ($1,$2)",
-      [req.user.id, req.body.id]
+      [req.user.id, roomsQuery.rows[0].id]
     );
-    res.json({
-      success: true,
-    });
   } catch(err) {
     console.log(err);
     res.status(500).send(err);
@@ -176,19 +244,18 @@ router.post("/join", authenticateToken, async (req: AuthenticatedRequest, res) =
       [
         `${req.user.username} joined group ${req.body.name}`,
         req.user.id,
-        req.body.id,
+        roomsQuery.rows[0].id,
         "system"
       ]
     );
-    res.json({
-      status: "Success",
+    res.status(200).send({
+      status: "success"
     });
-    return;
   } catch(err) {
     // second step failed delete room
     const deleteRoomMemberQuery = await pool.query(
-      "DELETE FROM rooms_members r WHERE r.user_id=$1 AND r.room_id=$2 CASCADE",
-      [req.user.id, req.body.id]
+      "DELETE FROM room_members WHERE user_id = $1 AND room_id = $2",
+      [req.user.id, roomsQuery.rows[0].id]
     );
     // second step failed delete room
     res.json({
@@ -196,6 +263,24 @@ router.post("/join", authenticateToken, async (req: AuthenticatedRequest, res) =
     });
     return;
   }
+});
+
+// LEAVE
+router.post("/leave", authenticateToken, async (req: AuthenticatedRequest, res) => {
+  // get caller id and name
+  if (!req.user) {
+    res.status(500).json({message: "Missing user"});
+    return;
+  }
+
+  // check if room is private (check password)
+  console.log(req.body.id, req.body.name);
+  const roomsQuery = await pool.query(
+    "DELETE * FROM room_members r WHERE r.user_id=$1 AND r.room_id=$2",
+    [req.user.id, req.body.room_id]
+  );
+
+  res.send(200);
 });
 
 // DELETE
