@@ -83,9 +83,9 @@ export const useAuthStore = defineStore('jwt', () => {
 
   // Login
   const login = async (username: string, password: string) => {
-    if (user.value.loggedIn) return;
+    if (user.value.loggedIn) return false;
 
-    const { data } = await axios.post<{
+    const res = await axios.post<{
       tokens: { accessToken: string; refreshToken: string };
       id: number;
       username: string;
@@ -97,27 +97,33 @@ export const useAuthStore = defineStore('jwt', () => {
       }
     );
 
-    console.log(data);
-    jwt.value.access = data.tokens.accessToken;
-    jwt.value.refresh = data.tokens.refreshToken;
+    console.log(res.status);
+    if(res.status !== 200) {
+      return false;
+    }
 
-    Cookies.set('access_token', data.tokens.accessToken, { path: '/' });
-    Cookies.set('refresh_token', data.tokens.refreshToken, { path: '/', sameSite: "Lax", secure: false });
+    jwt.value.access = res.data.tokens.accessToken;
+    jwt.value.refresh = res.data.tokens.refreshToken;
+
+    Cookies.set('access_token', res.data.tokens.accessToken, { path: '/' });
+    Cookies.set('refresh_token', res.data.tokens.refreshToken, { path: '/', sameSite: "Lax", secure: false });
 
     user.value = {
       loggedIn: true,
-      id: data.id,
-      username: data.username,
+      id: res.data.id,
+      username: res.data.username,
       jwt: {
-        access: data.tokens.accessToken,
-        refresh: data.tokens.refreshToken
+        access: res.data.tokens.accessToken,
+        refresh: res.data.tokens.refreshToken
       }
     };
 
     persistData();
 
     // Redirect to /app after login
-    router.push('/');
+    window.location.assign('/');
+
+    return true;
   };
 
   // Logout
@@ -140,7 +146,7 @@ export const useAuthStore = defineStore('jwt', () => {
 
   // Signup
   const signup = async (username: string, password: string) => {
-    const { data } = await axios.post(
+    const res = await axios.post(
       `${URL}/auth/signup`,
       {
         username: username,
@@ -148,27 +154,34 @@ export const useAuthStore = defineStore('jwt', () => {
       }
     );
     
-    console.log(data);
-    jwt.value.access = data.tokens.accessToken;
-    jwt.value.refresh = data.tokens.refreshToken;
+    console.log(res.status);
+    if(res.status !== 200) {
+      return false;
+    }
 
-    Cookies.set('access_token', data.tokens.accessToken, { path: '/' });
-    Cookies.set('refresh_token', data.tokens.refreshToken, { path: '/', sameSite: "Lax", secure: false });
+    jwt.value.access = res.data.tokens.accessToken;
+    jwt.value.refresh = res.data.tokens.refreshToken;
+
+    Cookies.set('access_token', res.data.tokens.accessToken, { path: '/' });
+    Cookies.set('refresh_token', res.data.tokens.refreshToken, { path: '/', sameSite: "Lax", secure: false });
 
     user.value = {
       loggedIn: true,
-      id: data.id,
-      username: data.username,
+      id: res.data.id,
+      username: res.data.username,
       jwt: {
-        access: data.tokens.accessToken,
-        refresh: data.tokens.refreshToken
+        access: res.data.tokens.accessToken,
+        refresh: res.data.tokens.refreshToken
       }
     };
 
     persistData();
 
     // Redirect to /app after login
-    router.push('/');
+    window.location.assign('/');
+    window.location.reload();
+
+    return true;
   };
 
   const currentUser = computed(() => user.value);

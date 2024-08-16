@@ -69,6 +69,7 @@ io.on('connection', (socket) => {
   // join room
   socket.on("join-room", async (msg) => {
     await handleChangeOnlineState(true, socket);
+    console.log("changed state");
     const isDone = await handleJoinRoom(msg, socket);
     if(!isDone) {
       socket.emit("error", { message: "" });

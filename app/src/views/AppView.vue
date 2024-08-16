@@ -49,6 +49,7 @@ const selectAvailableRoom = (room: any) => {
 };
 
 const loadRooms = async () => {
+  console.log("loading rooms");
   const rooms = await roomsStore.getRooms();
   availableRooms.value = rooms.availableRooms;
   joinedRooms.value = rooms.joinedRooms;
@@ -114,7 +115,7 @@ const sendMessage = async() => {
   }
 };
 
-const getroomDetails = async () => {
+const getRoomDetails = async () => {
   if (selectedRoom.value && selectedRoom.value.id) {
     messages.value = [];
     const roomId = selectedRoom.value.id;
@@ -140,7 +141,7 @@ const getroomDetails = async () => {
       console.log("done");
     });
 
-    socket.value.on("chat message", (a: any) => {
+    socket.value.on("chat message", async (a: any) => {
       if(messages.value) {
         if(messages.value[messages.value.length-1].created_at !== a.created_at) {
           messages.value = [
@@ -154,6 +155,10 @@ const getroomDetails = async () => {
         messages.value = [{
           ...a
         }]
+      }
+
+      if(a.message_type === "system") {
+        await getRoomDetails();
       }
       
       // Scroll to the bottom when a new message is added
@@ -200,7 +205,7 @@ const deleteRoom = async() => {
 
 // Watchers
 watch(authStore.currentJwt, loadRooms);
-watch(selectedRoom, getroomDetails);
+watch(selectedRoom, getRoomDetails);
 watch(route, loadRooms);
 onUnmounted(() => {
   if (socket.value) {

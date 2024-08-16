@@ -7,10 +7,16 @@ const authStore = useAuthStore();
 
 const username = ref("");
 const password = ref("");
+const errorMessage = ref("");
 
 // Signup function
 const handleSignup = async () => {
-  await authStore.signup(username.value, password.value);
+  try {
+    const success = await authStore.signup(username.value, password.value);
+    errorMessage.value = "";
+  } catch(err) {
+    errorMessage.value = "Username already taken.";
+  }
 };
 </script>
 
@@ -18,6 +24,12 @@ const handleSignup = async () => {
   <div class="flex items-center justify-center min-h-screen bg-black text-white">
     <div class="p-8 bg-gray-800 rounded-lg shadow-lg w-full max-w-sm">
       <h1 class="text-2xl font-bold mb-4">Signup</h1>
+
+      <!-- Error message box -->
+      <div v-if="errorMessage" class="mb-4 p-2 bg-red-600 text-white rounded">
+        {{ errorMessage }}
+      </div>
+
       <input
         v-model="username"
         placeholder="Username"

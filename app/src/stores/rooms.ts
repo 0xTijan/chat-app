@@ -84,7 +84,7 @@ export const useRoomsStore = defineStore('rooms', () => {
     );
 
     await getRooms();
-    router.push('/');
+    window.location.assign('/');
   };
 
   const getRoomById = async (id: number): Promise<RoomData | null> => {
@@ -162,7 +162,7 @@ export const useRoomsStore = defineStore('rooms', () => {
     );
 
     await getRooms();
-    router.push('/');
+    window.location.assign('/');
   };
 
   const leaveRoom = async (id: number, name: string) => {
@@ -180,7 +180,7 @@ export const useRoomsStore = defineStore('rooms', () => {
     );
 
     await getRooms();
-    router.push('/');
+    window.location.assign('/');
   };
 
   return { 

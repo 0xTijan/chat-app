@@ -48,6 +48,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
   const roomId = Number(req.params.id);
 
   try {
+    console.log("querying");
     // Fetch room data along with members and user details in a single query
     const roomDataQuery = await pool.query(
       `SELECT 
@@ -121,6 +122,17 @@ router.post("/create", authenticateToken, async (req: AuthenticatedRequest, res)
     if (req.body.is_private) {
       passwordHash = await bcrypt.hash(req.body.password, 10);
     }
+
+    const roomsQuery = await pool.query(
+      "SELECT * FROM rooms r WHERE r.name=$1",
+      [req.body.name]
+    );
+    
+    if((roomsQuery.rowCount || 1) > 0) {
+      res.status(500).send("Room name already taken.");
+      return;
+    }
+  
 
     const newRoomQuery = await pool.query(
       "INSERT INTO rooms(name, owner, password_hash, is_private) values ($1,$2,$3,$4) RETURNING id, name",
@@ -220,6 +232,11 @@ router.post("/join", authenticateToken, async (req: AuthenticatedRequest, res) =
   );
 
   console.log(roomsQuery.rows[0]);
+
+  if((roomsQuery?.rowCount || 0) <= 0) {
+    res.status(500).send("Room does not exist.");
+    return;
+  }
 
   // check password
   if(roomsQuery.rows[0].is_private) {

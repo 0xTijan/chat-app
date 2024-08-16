@@ -5,15 +5,21 @@ import { ref } from 'vue';
 
 const chatName = ref('');
 const password = ref('');
+const errorMessage = ref("");
 
 const authStore = useAuthStore();
 const roomsStore = useRoomsStore();
 
 const joinChat = async () => {
-  await roomsStore.joinRoom({
-    name: chatName.value,
-    password: password.value,
-  });
+  try {
+    await roomsStore.joinRoom({
+      name: chatName.value,
+      password: password.value,
+    });
+    errorMessage.value = "";
+  } catch(err) {
+    errorMessage.value = "Wrong room name or password.";
+  }
 }
 </script>
 
@@ -21,6 +27,11 @@ const joinChat = async () => {
   <div class="flex items-center justify-center min-h-screen bg-black text-white">
     <div class="w-full max-w-lg p-8 bg-gray-800 rounded-lg shadow-lg">
       <h1 class="text-2xl font-bold mb-6">Join Private Chat</h1>
+
+      <!-- Error message box -->
+      <div v-if="errorMessage" class="mb-4 p-2 bg-red-600 text-white rounded">
+        {{ errorMessage }}
+      </div>
 
       <div class="mb-4">
         <label for="chatName" class="block text-sm font-medium mb-2">Chat Name</label>
@@ -51,12 +62,12 @@ const joinChat = async () => {
         Join Chat
       </button>
 
-      <RouterLink
-        to="/"
+      <a
+        href="/"
         class="text-blue-400 hover:text-blue-300 mt-6"
       >
         Back
-      </RouterLink>
+    </a>
     </div>
   </div>
 </template>
