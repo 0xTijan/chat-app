@@ -121,7 +121,7 @@ export const useAuthStore = defineStore('jwt', () => {
     persistData();
 
     // Redirect to /app after login
-    window.location.assign('/');
+    window.location.assign("http://localhost:5173/");
 
     return true;
   };
@@ -178,8 +178,7 @@ export const useAuthStore = defineStore('jwt', () => {
     persistData();
 
     // Redirect to /app after login
-    window.location.assign('/');
-    window.location.reload();
+    window.location.assign("http://localhost:5173/");
 
     return true;
   };

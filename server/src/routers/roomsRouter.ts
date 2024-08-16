@@ -128,7 +128,7 @@ router.post("/create", authenticateToken, async (req: AuthenticatedRequest, res)
       [req.body.name]
     );
     
-    if((roomsQuery.rowCount || 1) > 0) {
+    if((roomsQuery.rowCount || 0) > 0) {
       res.status(500).send("Room name already taken.");
       return;
     }
