@@ -11,23 +11,25 @@ export interface Room {
   password?: string;
 }
 
+export interface RoomDetails {
+  id: number;
+  name: string;
+  created_at: string;
+  owner: number;
+  is_private: boolean;
+};
+export interface ChatUser {
+  id: number;
+  username: string;
+  created_at: string;
+  is_owner: boolean;
+  last_login: string;
+  is_online: boolean;
+};
+
 export interface RoomData {
-  data: {
-    room: {
-      id: number;
-      name: string;
-      created_at: string;
-      owner: number;
-      is_private: boolean;
-    };
-    users: {
-      id: number;
-      username: string;
-      created_at: string;
-      is_owner: boolean;
-      last_login: string;
-    }[];
-  };
+  users: ChatUser[];
+  room: RoomDetails;
 };
 
 export interface Message {
@@ -129,7 +131,7 @@ export const useRoomsStore = defineStore('rooms', () => {
     }
   };
 
-  const joinRoom = async (data: { name: string, password: string }) => {
+  const joinRoom = async (data: { name: string, password: string, id?: number }) => {
     const postReq = await axios.post(
       `${URL}/rooms/join`,
       {
@@ -143,12 +145,52 @@ export const useRoomsStore = defineStore('rooms', () => {
     );
 
     await getRooms();
+    router.push(`/${data.id || ""}`);
+  };
+
+  const deleteRoom = async (id: number) => {
+    const postReq = await axios.post(
+      `${URL}/rooms/delete`,
+      {
+        id: id
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${currentJwt.access}`
+        }
+      }
+    );
+
+    await getRooms();
     router.push('/');
   };
 
-  const deleteRoom = async () => {
+  const leaveRoom = async (id: number, name: string) => {
+    const postReq = await axios.post(
+      `${URL}/rooms/leave`,
+      {
+        room_id: id,
+        name: name
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${currentJwt.access}`
+        }
+      }
+    );
 
+    await getRooms();
+    router.push('/');
   };
 
-  return { rooms: currentRooms, getRooms, createRoom, joinRoom, getRoomById, getRoomMessages };
+  return { 
+    rooms: currentRooms,
+    getRooms,
+    createRoom,
+    joinRoom,
+    getRoomById,
+    getRoomMessages,
+    deleteRoom,
+    leaveRoom
+  };
 });

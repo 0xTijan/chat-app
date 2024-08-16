@@ -101,15 +101,8 @@ export const useAuthStore = defineStore('jwt', () => {
     jwt.value.access = data.tokens.accessToken;
     jwt.value.refresh = data.tokens.refreshToken;
 
-    console.log("Setting access token:", data.tokens.accessToken);
     Cookies.set('access_token', data.tokens.accessToken, { path: '/' });
-
-    console.log("Setting refresh token:", data.tokens.refreshToken);
-    console.log("aa")
     Cookies.set('refresh_token', data.tokens.refreshToken, { path: '/', sameSite: "Lax", secure: false });
-
-    console.log("Refresh token from cookie:", Cookies.get('refresh_token'));
-    console.log("Access token from cookie:", Cookies.get('access_token'));
 
     user.value = {
       loggedIn: true,
@@ -155,16 +148,26 @@ export const useAuthStore = defineStore('jwt', () => {
       }
     );
     
-    console.log("Setting access token:", data.tokens.accessToken);
-    Cookies.set('access_token', data.tokens.accessToken, { path: '/' });
+    console.log(data);
+    jwt.value.access = data.tokens.accessToken;
+    jwt.value.refresh = data.tokens.refreshToken;
 
-    console.log("Setting refresh token:", data.tokens.refreshToken);
-    console.log("aa")
+    Cookies.set('access_token', data.tokens.accessToken, { path: '/' });
     Cookies.set('refresh_token', data.tokens.refreshToken, { path: '/', sameSite: "Lax", secure: false });
 
-    console.log(data);
+    user.value = {
+      loggedIn: true,
+      id: data.id,
+      username: data.username,
+      jwt: {
+        access: data.tokens.accessToken,
+        refresh: data.tokens.refreshToken
+      }
+    };
 
-    // Redirect to /app after signup
+    persistData();
+
+    // Redirect to /app after login
     router.push('/');
   };
 

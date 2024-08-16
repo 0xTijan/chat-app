@@ -12,7 +12,7 @@ const roomsStore = useRoomsStore();
 const joinChat = async () => {
   await roomsStore.joinRoom({
     name: chatName.value,
-    password: password.value
+    password: password.value,
   });
 }
 </script>

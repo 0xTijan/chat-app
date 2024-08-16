@@ -12,6 +12,7 @@ import { authorizeTokenSocket } from './middleware/auth';
 import { handleMessage } from './sockets/messages';
 import { handleJoinRoom, handleLeaveRoom } from './sockets/rooms';
 import cookieParser from "cookie-parser";
+import { handleChangeOnlineState } from './sockets/connection';
 
 
 dotenv.config();
@@ -59,7 +60,7 @@ io.use(authorizeTokenSocket);
 io.on('connection', (socket) => {
   // Handle incoming messages
   socket.on('message', async (msg) => {
-    const isDone = await handleMessage(msg, socket);
+    const isDone = await handleMessage(msg, "user", socket);
     if(!isDone) {
       socket.emit("error", { message: "Must be a member!" });
     }
@@ -67,7 +68,7 @@ io.on('connection', (socket) => {
 
   // join room
   socket.on("join-room", async (msg) => {
-    console.log("joining ", msg);
+    await handleChangeOnlineState(true, socket);
     const isDone = await handleJoinRoom(msg, socket);
     if(!isDone) {
       socket.emit("error", { message: "" });
@@ -83,8 +84,10 @@ io.on('connection', (socket) => {
   });
 
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log('user disconnected');
+    // set is_online to false
+    await handleChangeOnlineState(false, socket);
   });
 });
 

@@ -2,6 +2,7 @@ import express from 'express';
 import { pool } from '../db';
 import bcrypt from "bcrypt";
 import { AuthenticatedRequest, authenticateToken } from '../middleware/auth';
+import { sendMessageToRoomSocket } from '../sockets/messages';
 
 
 const router = express.Router();
@@ -58,7 +59,8 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
         rm.user_id AS member_user_id,
         u.username AS member_username,
         u.created_at AS member_created_at,
-        u.last_login AS member_last_login
+        u.last_login AS member_last_login,
+        u.is_online AS member_is_online
       FROM 
         rooms r
       LEFT JOIN 
@@ -76,6 +78,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
       created_at: roomDataQuery.rows[0].room_created_at,
       owner: roomDataQuery.rows[0].room_owner,
       is_private: roomDataQuery.rows[0].room_is_private,
+      is_online: roomDataQuery.rows[0].member_is_online
     };
 
     const users = roomDataQuery.rows.map((row) => {
@@ -85,7 +88,8 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
         username: row.member_username,
         created_at: row.member_created_at,
         last_login: row.member_last_login,
-        is_owner: isOwner
+        is_owner: isOwner,
+        is_online: row.member_is_online
       };
     });
 
@@ -248,6 +252,15 @@ router.post("/join", authenticateToken, async (req: AuthenticatedRequest, res) =
         "system"
       ]
     );
+    // send message to users in group
+    await sendMessageToRoomSocket(
+      {
+        room_id: roomsQuery.rows[0].id,
+        content: `${req.user.username} joined group ${req.body.name}`
+      },
+      "system",
+      req.user.id
+    );
     res.status(200).send({
       status: "success"
     });
@@ -274,17 +287,36 @@ router.post("/leave", authenticateToken, async (req: AuthenticatedRequest, res) 
   }
 
   // check if room is private (check password)
-  console.log(req.body.id, req.body.name);
+  console.log(req.body.room_id, req.body.name);
   const roomsQuery = await pool.query(
-    "DELETE * FROM room_members r WHERE r.user_id=$1 AND r.room_id=$2",
+    "DELETE FROM room_members r WHERE r.user_id=$1 AND r.room_id=$2",
     [req.user.id, req.body.room_id]
   );
-
-  res.send(200);
+  const newMessageQuery = await pool.query(
+    "INSERT INTO messages(content, user_id, room_id, message_type) values ($1,$2,$3,$4)",
+    [
+      `${req.user.username} left group ${req.body.name}`,
+      req.user.id,
+      req.body.room_id,
+      "system"
+    ]
+  );
+  // send mesage to users in group
+  await sendMessageToRoomSocket(
+    {
+      room_id: req.body.room_id,
+      content: `${req.user.username} left group ${req.body.name}`
+    },
+    "system",
+    req.user.id
+  );
+  res.status(200).send({
+    status: "success"
+  });
 });
 
 // DELETE
-router.delete("/delete", authenticateToken, async (req: AuthenticatedRequest, res) => {
+router.post("/delete", authenticateToken, async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
     res.status(500).json({message: "Missing user"});
     return;

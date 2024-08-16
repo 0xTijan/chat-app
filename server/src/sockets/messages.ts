@@ -2,14 +2,14 @@ import { io } from "..";
 import { pool } from "../db";
 import { AuthenticatedSocket } from "../middleware/auth";
 
-export const handleMessage = async (msg: {content: string, room_id: number}, socket: AuthenticatedSocket) => {
+export const handleMessage = async (msg: {content: string, room_id: number}, messageType: "user" | "system", socket: AuthenticatedSocket) => {
   if (socket.user) {
     // Save message to the database
     const isSaved = await saveMessage(msg, socket.user?.id);
   
     // send message to room
     if (isSaved) {
-      await sendMessageToRoomSocket(msg, socket.user?.id);
+      await sendMessageToRoomSocket(msg, messageType, socket.user?.id);
       return true;
     } else {
       return false;
@@ -39,7 +39,7 @@ const saveMessage = async (msg: {content: string, room_id: number}, user_id: num
   }
 };
 
-const sendMessageToRoomSocket = async (msg: {content: string, room_id: number}, user_id: number) => {
+export const sendMessageToRoomSocket = async (msg: {content: string, room_id: number}, messageType: "user" | "system", user_id: number) => {
   // Broadcast message to all clients in the same room
   console.log("sending to ", msg.room_id.toString(), msg, user_id);
   io.in(msg.room_id.toString()).emit(
@@ -48,7 +48,7 @@ const sendMessageToRoomSocket = async (msg: {content: string, room_id: number}, 
       ...msg,
       user_id: user_id,
       created_at: new Date(),
-      message_type: "user"
+      message_type: messageType
     }
   );
 };

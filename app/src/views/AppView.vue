@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import { useRoomsStore } from '@/stores/rooms';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, nextTick, reactive } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import type { RoomData, Message } from '@/stores/rooms';
+import type { ChatUser, Message, RoomDetails } from '@/stores/rooms';
 import { io } from 'socket.io-client';
+import { format } from 'date-fns';
 
 const authStore = useAuthStore();
 const roomsStore = useRoomsStore();
@@ -19,8 +20,11 @@ const joinedRooms = ref<any[]>([]);
 const selectedRoom = ref<any | null>(null);
 const selectedAvailableRoom = ref<any | null>(null);
 const newMessage = ref("");
-const roomData = ref<RoomData | null>(null);
+const details = ref<RoomDetails | null>(null);
+const chatUsers = ref<ChatUser[] | null>(null);
 const messages = ref<Message[] | null>(null);
+
+const messagesContainer = ref<HTMLDivElement | null>(null);
 
 const handleLogout = async () => {
   await authStore.logout();
@@ -32,12 +36,15 @@ const selectRoom = (room: any) => {
 };
 
 const selectAvailableRoom = (room: any) => {
-  socket.value = io(URL, {
+  if(!socket.value) {
+    console.log("connecting");
+    socket.value = io(URL, {
       withCredentials: true,
       extraHeaders: {
         "Authorization": `Bearer ${authStore.currentJwt.access}`
       }
     });
+  }
   selectedAvailableRoom.value = room;
 };
 
@@ -54,10 +61,14 @@ const loadRooms = async () => {
     } else {
       router.push('/');
     }
+  } else {
+    selectedRoom.value = null;
+    chatUsers.value = null;
   }
 
   // update socket
   if (socket.value) {
+    console.log("connecting");
     socket.value.disconnect();
     socket.value = io(URL, {
       withCredentials: true,
@@ -73,7 +84,8 @@ const joinChat = async () => {
     try {
       await roomsStore.joinRoom({
         name: selectedAvailableRoom.value.name,
-        password: ""
+        password: "",
+        id: selectedAvailableRoom.value.id
       });
       socket.value.emit('join-room', { room_id: selectedAvailableRoom.value.id }, () => {
         console.log("done");
@@ -87,32 +99,42 @@ const joinChat = async () => {
 
 const sendMessage = async() => {
   console.log(selectedRoom.value.id)
-  if (newMessage.value.trim() && roomData) {
-    console.log(`Sending message: ${newMessage.value}`);
+  if (newMessage.value.trim() && details.value && chatUsers.value) {
     const payload = {
       content: newMessage.value,
       room_id: selectedRoom.value.id
     };
-    console.log("payload, ", payload);
-
+    
     if (socket.value) {
-      socket.value.emit('message', payload, () => {
-        console.log("done");
-      });
+      console.log("sending message");
+      socket.value.emit('message', payload);
     }
   
     newMessage.value = "";
   }
 };
 
-const getRoomData = async () => {
+const getroomDetails = async () => {
   if (selectedRoom.value && selectedRoom.value.id) {
     messages.value = [];
     const roomId = selectedRoom.value.id;
     const res = await roomsStore.getRoomById(roomId);
     const resMessages = await roomsStore.getRoomMessages(roomId);
     messages.value = resMessages.messages;
-    roomData.value = res;
+    console.log(res);
+    console.log("setting data, ", res?.room || null, res?.users || null)
+    details.value = res?.room || null;
+    chatUsers.value = res?.users || null;
+
+    if(!socket.value) {
+      console.log("connecting");
+      socket.value = io(URL, {
+        withCredentials: true,
+        extraHeaders: {
+          "Authorization": `Bearer ${authStore.currentJwt.access}`
+        }
+      });
+    }
 
     socket.value.emit('join-room', { room_id: roomId }, () => {
       console.log("done");
@@ -120,32 +142,77 @@ const getRoomData = async () => {
 
     socket.value.on("chat message", (a: any) => {
       if(messages.value) {
-        messages.value = [
-          ...messages.value,
-          {
-            ...a
-          }
-        ];
+        if(messages.value[messages.value.length-1].created_at !== a.created_at) {
+          messages.value = [
+            ...messages.value,
+            {
+              ...a
+            }
+          ];
+        }
       } else {
         messages.value = [{
           ...a
         }]
       }
+      
+      // Scroll to the bottom when a new message is added
+      nextTick(() => {
+        if (messagesContainer.value) {
+          messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+        }
+      });
     });
   }
 };
 
+const getMessageUsername = (message: Message) => {
+  let toReturn = "User";
+  console.log("users room data ", details.value, chatUsers.value);
+  chatUsers.value?.forEach((user: any) => {
+    if (user.id === message.user_id) toReturn = user.username;
+  });
+  return toReturn;
+};
+
+const getStatus = (member: ChatUser) => {
+  if (member.id === authStore.user.id) return true;
+  return member.is_online;
+};
+
+const leaveRoom = async() => {
+  // leave room
+  if (details.value) {
+    if (details.value?.owner !== authStore.user.id) {
+      await roomsStore.leaveRoom(details.value.id, details.value.name);
+    }
+  }
+}
+
+const deleteRoom = async() => {
+  // delete room
+  if (details.value) {
+    if (details.value?.owner === authStore.user.id) {
+      await roomsStore.deleteRoom(details.value.id);
+    }
+  }
+}
+
 // Watchers
 watch(authStore.currentJwt, loadRooms);
-watch(selectedRoom, getRoomData);
+watch(selectedRoom, getroomDetails);
 watch(route, loadRooms);
-/* Cleanup on unmount
 onUnmounted(() => {
-  if (isConnected) {
-    socket.disconnect();
-    isConnected = false;
+  if (socket.value) {
+    console.log("disconected");
+    socket.value.disconnect();
   }
-});*/
+});
+
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  return format(date, "d.M. HH:mm");
+};
 </script>
 
 <template>
@@ -204,26 +271,27 @@ onUnmounted(() => {
     <div class="w-2/4 p-4">
       <div v-if="selectedRoom">
         <h1 class="text-xl font-bold mb-4">Selected Room: {{ selectedRoom.name }}</h1>
-        <div class="chat-content p-4 bg-gray-800 rounded h-[65vh] overflow-y-scroll">
-          <!-- Chat content will be rendered here -->
-          <div class="chat-content p-4 bg-gray-800 rounded h-[65vh] overflow-y-scroll">
-            <div v-for="(message, index) in messages" :key="index" class="mb-2">
-              <div v-if="message.message_type === 'system'" class="text-center text-gray-400">
-                <!-- System Message -->
-                <p>{{ message.content }}</p>
+        <div ref="messagesContainer" class="chat-content p-4 bg-gray-800 rounded h-[65vh] overflow-y-scroll">
+          <div v-for="(message, index) in messages" :key="index" class="mb-2">
+            <div v-if="message.message_type === 'system'" class="text-center text-gray-400 italic">
+              <!-- System Message -->
+              <p>{{ message.content }}</p>
+            </div>
+            <div v-else-if="message.user_id === authStore.user.id" class="text-right">
+              <!-- Current User's Message -->
+              <div class="inline-block p-2 bg-blue-600 rounded text-white">
+                <p class="text-sm font-semibold">You</p>
+                <p class="whitespace-pre-wrap">{{ message.content }}</p>
               </div>
-              <div v-else-if="message.user_id === authStore.user.id" class="text-right">
-                <!-- Current User's Message -->
-                <div class="inline-block p-2 bg-blue-600 rounded text-white">
-                  <p>{{ message.content }}</p>
-                </div>
+              <p class="text-xs text-gray-400 mt-1">{{ formatDate(message.created_at) }}</p>
+            </div>
+            <div v-else class="text-left">
+              <!-- Other User's Message -->
+              <div class="inline-block p-2 bg-gray-700 rounded text-white">
+                <p class="text-sm font-semibold">{{ getMessageUsername(message) }}</p>
+                <p class="whitespace-pre-wrap">{{ message.content }}</p>
               </div>
-              <div v-else class="text-left">
-                <!-- Other User's Message -->
-                <div class="inline-block p-2 bg-gray-700 rounded text-white">
-                  <p>{{ message.content }}</p>
-                </div>
-              </div>
+              <p class="text-xs text-gray-400 mt-1">{{ formatDate(message.created_at) }}</p>
             </div>
           </div>
         </div>
@@ -257,23 +325,41 @@ onUnmounted(() => {
 
     <!-- Right Sidebar (Chat Room Members and Details) -->
     <div class="w-1/4 bg-gray-800 p-4">
-      <h1 class="text-xl font-bold mb-4">{{ roomData?.data?.room?.name || "Chat" }} Details</h1>
-      <p v-if="!roomData">
+      <h1 class="text-xl font-bold mb-4">
+        {{ details?.name || "Chat" }} Details
+      </h1>
+      <p v-if="!details">
         Select a chat to see details.
       </p>
       <div v-else>
-        <p>{{ roomData?.data?.room?.name }}</p>
-        <hr class="my-4 border-gray-600" />
-        <h1 class="text-xl font-bold mb-4">Room Members</h1>
+        <p class="text-lg font-semibold mb-2">Room Members</p>
         <ul>
           <li 
-            v-for="(member, index) in roomData?.data?.users" 
+            v-for="(member, index) in chatUsers" 
             :key="index" 
-            class="p-2 mb-2 bg-gray-700 rounded"
+            class="p-4 mb-2 bg-gray-700 rounded flex items-center justify-between"
           >
-            <strong>{{ member.username }}</strong>
+            <div>
+              <strong class="text-white">{{ member.username }}</strong>
+              <span v-if="member.is_owner" class="ml-2 bg-yellow-500 text-black text-xs font-semibold py-1 px-2 rounded">
+                Owner
+              </span>
+              <p class="text-sm text-gray-400">Last Logged In: {{ formatDate(member.last_login || (new Date()).toString()) }}</p>
+              <p :class="{'text-green-400': getStatus(member), 'text-red-400': !getStatus(member)}" class="text-sm">
+                Status: {{ getStatus(member) ? 'Online' : 'Offline' }}
+              </p>
+            </div>
           </li>
         </ul>
+      </div>
+      <div v-if="details !== null">
+        <hr class="my-4 border-gray-600" />
+        <button v-if="details?.owner !== authStore.user.id" @click="leaveRoom" class="w-full mt-4 p-2 bg-red-600 rounded hover:bg-red-700">
+          Leave Room
+        </button>
+        <button v-else @click="deleteRoom" class="w-full mt-4 p-2 bg-red-600 rounded hover:bg-red-700">
+          Delete Room
+        </button>
       </div>
     </div>
   </div>

@@ -17,6 +17,11 @@ router.post("/login", async (req, res) => {
     const isOk = await bcrypt.compare(req.body.password, potentialLogin.rows[0].password_hash);
     
     if (isOk) {
+      // update last login
+      const updateQuery = await pool.query(
+        "UPDATE users SET last_login=$1 WHERE username=$2",
+        [new Date().toISOString(), req.body.username]
+      );
       // login
       req.session.user = {
         username: potentialLogin.rows[0].username,
@@ -59,8 +64,8 @@ router.post("/signup", async (req, res) => {
     // register
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
     const newUserQuery = await pool.query(
-      "INSERT INTO users(username, password_hash) values ($1,$2) RETURNING id, username",
-      [req.body.username, hashedPassword]
+      "INSERT INTO users(username, password_hash, last_login, is_online) VALUES ($1, $2, $3, $4) RETURNING id, username",
+      [req.body.username, hashedPassword, new Date().toISOString(), false]
     );
     req.session.user = {
       username: newUserQuery.rows[0].username,
