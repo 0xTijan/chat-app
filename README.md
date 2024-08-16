@@ -21,8 +21,6 @@
 - Postgres (DB)
 
 ## Gallery:
-DEMO video [here](./images/demo.mp4).
-
 Chat page<br />
 ![crate](./images/main.png)
 
