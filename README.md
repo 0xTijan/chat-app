@@ -5,8 +5,11 @@
 - Public rooms
 - Private rooms (password)
 - Realtime chat
+- Sending images (bugs?)
 
 ## Tech Stack:
+- front end client - in `/client`
+- back end - in `/server`
 
 ### Front end:
 - VUE.js
@@ -18,11 +21,13 @@
 - Postgres (DB)
 
 ## Gallery:
-Login page<br />
-![login](./images/login.png)
+DEMO video [here](./images/demo.mp4).
 
 Chat page<br />
 ![crate](./images/main.png)
 
 Create page<br />
 ![crate](./images/create.png)
+
+Login page<br />
+![login](./images/login.png)

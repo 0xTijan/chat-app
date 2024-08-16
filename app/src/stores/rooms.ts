@@ -39,6 +39,7 @@ export interface Message {
   user_id: number;
   room_id: number;
   message_type: MessageType;
+  image: any | null;
 };
 
 export type MessageType = "user" | "system";

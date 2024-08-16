@@ -26,7 +26,8 @@ CREATE TABLE messages (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   user_id INTEGER references users(id),
   room_id INTEGER references rooms(id),
-  message_type message_type NOT NULL DEFAULT 'user'
+  message_type message_type NOT NULL DEFAULT 'user',
+  image BYTEA
 );
 
 CREATE TABLE room_members (

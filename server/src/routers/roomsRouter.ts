@@ -273,7 +273,8 @@ router.post("/join", authenticateToken, async (req: AuthenticatedRequest, res) =
     await sendMessageToRoomSocket(
       {
         room_id: roomsQuery.rows[0].id,
-        content: `${req.user.username} joined group ${req.body.name}`
+        content: `${req.user.username} joined group ${req.body.name}`,
+        image: null
       },
       "system",
       req.user.id
@@ -322,7 +323,8 @@ router.post("/leave", authenticateToken, async (req: AuthenticatedRequest, res) 
   await sendMessageToRoomSocket(
     {
       room_id: req.body.room_id,
-      content: `${req.user.username} left group ${req.body.name}`
+      content: `${req.user.username} left group ${req.body.name}`,
+      image: null,
     },
     "system",
     req.user.id

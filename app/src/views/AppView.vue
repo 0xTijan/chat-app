@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import { useRoomsStore } from '@/stores/rooms';
-import { computed, onMounted, onUnmounted, ref, watch, nextTick, reactive } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, nextTick, reactive, type Reactive } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import type { ChatUser, Message, RoomDetails } from '@/stores/rooms';
 import { io } from 'socket.io-client';
@@ -22,9 +22,29 @@ const selectedAvailableRoom = ref<any | null>(null);
 const newMessage = ref("");
 const details = ref<RoomDetails | null>(null);
 const chatUsers = ref<ChatUser[] | null>(null);
-const messages = ref<Message[] | null>(null);
+const messages = ref<Reactive<Message>[] | null>(null);
 
 const messagesContainer = ref<HTMLDivElement | null>(null);
+const fileInput = ref<any>(null);
+const file = ref<any>(null);
+
+const triggerFileInput = () => {
+  fileInput.value.click();
+};
+
+const handleFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const selectedFile = target.files?.[0];
+  if (selectedFile) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        file.value = reader.result.split(',')[1]; // Get Base64 string
+      }
+    };
+    reader.readAsDataURL(selectedFile);
+  }
+};
 
 const handleLogout = async () => {
   await authStore.logout();
@@ -67,7 +87,6 @@ const loadRooms = async () => {
     chatUsers.value = null;
   }
 
-  // update socket
   if (socket.value) {
     console.log("connecting");
     socket.value.disconnect();
@@ -100,10 +119,11 @@ const joinChat = async () => {
 
 const sendMessage = async() => {
   console.log(selectedRoom.value.id)
-  if (newMessage.value.trim() && details.value && chatUsers.value) {
+  if ((newMessage.value.trim() || file?.value) && details.value && chatUsers.value) {
     const payload = {
       content: newMessage.value,
-      room_id: selectedRoom.value.id
+      room_id: selectedRoom.value.id,
+      image: file.value || null,
     };
     
     if (socket.value) {
@@ -112,6 +132,7 @@ const sendMessage = async() => {
     }
   
     newMessage.value = "";
+    file.value = null;
   }
 };
 
@@ -121,9 +142,7 @@ const getRoomDetails = async () => {
     const roomId = selectedRoom.value.id;
     const res = await roomsStore.getRoomById(roomId);
     const resMessages = await roomsStore.getRoomMessages(roomId);
-    messages.value = resMessages.messages;
-    console.log(res);
-    console.log("setting data, ", res?.room || null, res?.users || null)
+    messages.value = resMessages.messages.map((msg: any) => reactive({ ...msg }));
     details.value = res?.room || null;
     chatUsers.value = res?.users || null;
 
@@ -142,26 +161,18 @@ const getRoomDetails = async () => {
     });
 
     socket.value.on("chat message", async (a: any) => {
-      if(messages.value) {
-        if(messages.value[messages.value.length-1].created_at !== a.created_at) {
-          messages.value = [
-            ...messages.value,
-            {
-              ...a
-            }
-          ];
+      if (messages.value) {
+        if (messages.value[messages.value.length - 1]?.created_at !== a.created_at) {
+          messages.value = [...messages.value, reactive({ ...a })];
         }
       } else {
-        messages.value = [{
-          ...a
-        }]
+        messages.value = [reactive({ ...a })];
       }
 
-      if(a.message_type === "system") {
+      if (a.message_type === "system") {
         await getRoomDetails();
       }
-      
-      // Scroll to the bottom when a new message is added
+
       nextTick(() => {
         if (messagesContainer.value) {
           messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
@@ -173,7 +184,6 @@ const getRoomDetails = async () => {
 
 const getMessageUsername = (message: Message) => {
   let toReturn = "User";
-  console.log("users room data ", details.value, chatUsers.value);
   chatUsers.value?.forEach((user: any) => {
     if (user.id === message.user_id) toReturn = user.username;
   });
@@ -186,7 +196,6 @@ const getStatus = (member: ChatUser) => {
 };
 
 const leaveRoom = async() => {
-  // leave room
   if (details.value) {
     if (details.value?.owner !== authStore.user.id) {
       await roomsStore.leaveRoom(details.value.id, details.value.name);
@@ -195,7 +204,6 @@ const leaveRoom = async() => {
 }
 
 const deleteRoom = async() => {
-  // delete room
   if (details.value) {
     if (details.value?.owner === authStore.user.id) {
       await roomsStore.deleteRoom(details.value.id);
@@ -203,22 +211,56 @@ const deleteRoom = async() => {
   }
 }
 
+// Check if the image field is in Buffer or ArrayBuffer format
+const processImage = (image: any): string => {
+  if (image && image.type === 'Buffer' && Array.isArray(image.data)) {
+    return `data:image/jpeg;base64,${bufferToBase64(image.data)}`;
+  } else if (image instanceof ArrayBuffer) {
+    return `data:image/jpeg;base64,${arrayBufferToBase64(image)}`;
+  }
+  return '';
+};
+
+const bufferToBase64 = (buffer: number[]): string => {
+  try {
+    const binary = Array.from(buffer, (byte) => String.fromCharCode(byte)).join('');
+    return btoa(binary);
+  } catch (error) {
+    console.error('Error in bufferToBase64:', error);
+    return '';
+  }
+};
+
+// Convert ArrayBuffer to Base64
+const arrayBufferToBase64 = (arrayBuffer: ArrayBuffer): string => {
+  try {
+    const bytes = new Uint8Array(arrayBuffer);
+    const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+    return btoa(binary);
+  } catch (error) {
+    console.error('Error in arrayBufferToBase64:', error);
+    return '';
+  }
+};
+
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  return format(date, "d.M. HH:mm");
+};
+
 // Watchers
 watch(authStore.currentJwt, loadRooms);
 watch(selectedRoom, getRoomDetails);
 watch(route, loadRooms);
 onUnmounted(() => {
   if (socket.value) {
-    console.log("disconected");
+    console.log("disconnected");
     socket.value.disconnect();
   }
 });
-
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return format(date, "d.M. HH:mm");
-};
 </script>
+
+
 
 <template>
   <div class="flex h-screen bg-gray-900 text-white">
@@ -279,22 +321,31 @@ const formatDate = (dateStr: string) => {
         <div ref="messagesContainer" class="chat-content p-4 bg-gray-800 rounded h-[65vh] overflow-y-scroll">
           <div v-for="(message, index) in messages" :key="index" class="mb-2">
             <div v-if="message.message_type === 'system'" class="text-center text-gray-400 italic">
-              <!-- System Message -->
               <p>{{ message.content }}</p>
             </div>
             <div v-else-if="message.user_id === authStore.user.id" class="text-right">
-              <!-- Current User's Message -->
-              <div class="inline-block p-2 bg-blue-600 rounded text-white">
+              <div class="inline-block p-2 bg-blue-600 rounded text-white max-w-sm">
                 <p class="text-sm font-semibold">You</p>
                 <p class="whitespace-pre-wrap">{{ message.content }}</p>
+                <img
+                  v-if="message.image"
+                  :src="processImage(message.image)"
+                  alt="User uploaded image"
+                  class="mt-2 rounded-lg max-w-full h-auto"
+                />
               </div>
               <p class="text-xs text-gray-400 mt-1">{{ formatDate(message.created_at) }}</p>
             </div>
             <div v-else class="text-left">
-              <!-- Other User's Message -->
-              <div class="inline-block p-2 bg-gray-700 rounded text-white">
+              <div class="inline-block p-2 bg-gray-700 rounded text-white max-w-sm">
                 <p class="text-sm font-semibold">{{ getMessageUsername(message) }}</p>
                 <p class="whitespace-pre-wrap">{{ message.content }}</p>
+                <img
+                  v-if="message.image"
+                  :src="processImage(message.image)"
+                  alt="User uploaded image"
+                  class="mt-2 rounded-lg max-w-full h-auto"
+                />
               </div>
               <p class="text-xs text-gray-400 mt-1">{{ formatDate(message.created_at) }}</p>
             </div>
@@ -313,6 +364,18 @@ const formatDate = (dateStr: string) => {
           >
             Send
           </button>
+        </div>
+        <div>
+          <input type="file" accept="image/*" ref="fileInput" @change="handleFileChange" style="display: none;" />
+          <button
+            class="mt-2 p-2 bg-blue-600 border border-blue-700 rounded text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            @click="triggerFileInput"
+          >
+            Select Image
+          </button>
+          <div v-if="file?.value">
+            Image selected
+          </div>
         </div>
       </div>
       <div v-if="selectedAvailableRoom">

@@ -2,7 +2,7 @@ import { io } from "..";
 import { pool } from "../db";
 import { AuthenticatedSocket } from "../middleware/auth";
 
-export const handleMessage = async (msg: {content: string, room_id: number}, messageType: "user" | "system", socket: AuthenticatedSocket) => {
+export const handleMessage = async (msg: {content: string, room_id: number, image: any}, messageType: "user" | "system", socket: AuthenticatedSocket) => {
   if (socket.user) {
     // Save message to the database
     const isSaved = await saveMessage(msg, socket.user?.id);
@@ -20,7 +20,7 @@ export const handleMessage = async (msg: {content: string, room_id: number}, mes
   }
 };
 
-const saveMessage = async (msg: {content: string, room_id: number}, user_id: number) => {
+const saveMessage = async (msg: {content: string, room_id: number, image: any}, user_id: number) => {
   // check if member
   const rmQuery = await pool.query(
     "SELECT FROM room_members r WHERE r.user_id=$1 AND r.room_id=$2",
@@ -30,8 +30,8 @@ const saveMessage = async (msg: {content: string, room_id: number}, user_id: num
   if ((rmQuery.rowCount || 0) >0) {
     // save to DB
     await pool.query(
-      'INSERT INTO messages (content, user_id, room_id) VALUES ($1, $2, $3)',
-      [msg.content, user_id, msg.room_id]
+      'INSERT INTO messages (content, user_id, room_id, image) VALUES ($1, $2, $3, $4)',
+      [msg.content, user_id, msg.room_id, msg.image ? Buffer.from(msg.image, 'base64') : null]
     );
     return true;
   } else {
@@ -39,7 +39,7 @@ const saveMessage = async (msg: {content: string, room_id: number}, user_id: num
   }
 };
 
-export const sendMessageToRoomSocket = async (msg: {content: string, room_id: number}, messageType: "user" | "system", user_id: number) => {
+export const sendMessageToRoomSocket = async (msg: {content: string, room_id: number, image: any}, messageType: "user" | "system", user_id: number) => {
   // Broadcast message to all clients in the same room
   console.log("sending to ", msg.room_id.toString(), msg, user_id);
   io.in(msg.room_id.toString()).emit(
@@ -48,7 +48,8 @@ export const sendMessageToRoomSocket = async (msg: {content: string, room_id: nu
       ...msg,
       user_id: user_id,
       created_at: new Date(),
-      message_type: messageType
+      message_type: messageType,
+      image: msg.image ? Buffer.from(msg.image, 'base64') : null
     }
   );
 };
